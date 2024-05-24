@@ -11,9 +11,9 @@
 #     xlsx used to aread and write source and target data
 #     dplyr used to aggregate data using functions melt and dcast
 
-packages <- c("xlsx","tidyverse")
-              
-packages.check <- lapply(
+packages <- c("xlsx", "dplyr", "stringr", "readxl", "tidyr")
+
+packages_check <- lapply(
   packages,
   FUN = function(x) {
     if (!require(x, character.only = TRUE)) {
@@ -22,20 +22,6 @@ packages.check <- lapply(
     }
   }
 )
-
-context <- rstudioapi::getActiveDocumentContext()
-path <- normalizePath(context$'path')
-setwd(dirname(path))
-
-if (!dir.exists("./data")) {
-  dir.create("./data")
-}
-
-if (!file.exists("./data/5206002_Expenditure_Volume_Measures.xlsx") ||
-    !file.exists("./data/5206003_Expenditure_Current_Price.xlsx")) {
-  file.create("./data/5206002_Expenditure_Volume_Measures.xlsx")
-  file.create("./data/5206003_Expenditure_Current_Price.xlsx")
-}
 
 cleanAndPivot <- function(df) {
   names(df) <- df[10,]
@@ -72,63 +58,61 @@ readXL <- function(sheet_nbr) {
   )
 }
 
-file_names <- list.files(paste0(getwd(), "/data"), pattern = "xlsx")
+file_names <- list("5206002_Expenditure_Volume_Measures.xlsx", "5206003_Expenditure_Current_Price.xlsx")
 
 for (file in file_names) {
-  
-  base_url <-
-    "https://www.abs.gov.au/statistics/economy/national-accounts/australian-national-accounts-national-income-expenditure-and-product/latest-release/"
-  
+
+base_url <- "https://www.abs.gov.au/statistics/economy/national-accounts/australian-national-accounts-national-income-expenditure-and-product/latest-release/"
+
   download.file(
     paste0(base_url, file),
     destfile = paste0(getwd(), "/data/", file),
     mode = "wb"
   )
-  
+
   if (file == "5206002_Expenditure_Volume_Measures.xlsx") {
-    
-      message(paste0("Read and tidy... ", file))
-    
+
+    message(paste0("Read and tidy... ", file))
+
     df_headers <- getHeaders(readXL(sheet_nbr=1))
     df_data1 <- cleanAndPivot(readXL(sheet_nbr=2))
     df_data2 <- cleanAndPivot(readXL(sheet_nbr=3))
     df_data <- union(df_data1, df_data2)
     df_output <-sapply(joinDataAndHeaders(df_data, df_headers), as.character)
-    
-      message(paste0("Writing to file... ", gsub(".xlsx", "", file), ".csv"))
-      
+
+    message(paste0("Writing to file... ", gsub(".xlsx", "", file), ".csv"))
+
     write.table(
       df_output,
-      file = paste0(
-        getwd(),"/output/",gsub(".xlsx", "", file)," (R Script transformation).csv"),
+      file = paste0("data/", sub("\\.[[:alnum:]]+$", "", file), ".csv"),
       row.names = FALSE,
       dec = ".",
       sep = ";",
       quote = TRUE
     )
-    
-      message(paste0("Done. Refer to .../Output/", gsub(".xlsx", "", file),".csv\n"))
-    
+
+  message(paste0("Done. Refer to .../Output/", gsub(".xlsx", "", file),".csv"))
+
   } else {
-    
+
     message(paste0("Read and tidy... ", file))
-    
-    df_headers <- getHeaders(readXL(sheet_nbr=1))
-    df_data <- cleanAndPivot(readXL(sheet_nbr=2))
+
+    df_headers <- getHeaders(readXL(sheet_nbr = 1))
+    df_data <- cleanAndPivot(readXL(sheet_nbr = 2))
     df_output <- sapply(joinDataAndHeaders(df_data, df_headers), as.character)
-    
-      message(paste0("Writing to file... ", gsub(".xlsx", "", file), ".csv"))
-    
+
+    message(paste0("Writing to file... ", gsub(".xlsx", "", file), ".csv"))
+
     write.table(
       df_output,
-      file = paste0(getwd(),"/output/",gsub(".xlsx", "", file)," (R Script transformation).csv"),
+      file = paste0("data/", sub("\\.[[:alnum:]]+$", "", file), ".csv"),
       row.names = FALSE,
       dec = ".",
       sep = ";",
       quote = TRUE
     )
-    
-      message(paste0("Done. Refer to .../output/",  gsub(".xlsx", "", file), ".csv"))
-    
+
+    message(paste0("Done. Refer to .../output/",  gsub(".xlsx", "", file), ".csv"))
+
   }
 }
