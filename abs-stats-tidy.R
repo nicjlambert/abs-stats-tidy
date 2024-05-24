@@ -11,9 +11,7 @@
 #     xlsx used to aread and write source and target data
 #     dplyr used to aggregate data using functions melt and dcast
 
-packages <- c("xlsx"
-            , "tidyverse"  # A Grammar of Data Manipulation
-)
+packages <- c("xlsx","tidyverse")
               
 packages.check <- lapply(
   packages,
