@@ -2,11 +2,11 @@
 #
 # (0) Downloads and spreadsheets Australian Bureau of Statistics (ABS)
 # (1) Merges the Index and the Data sheets to create one dataset.
-# (2) Extracts only the measurements on the mean and standard deviation 
+# (2) Extracts only the measurements on the mean and standard deviation
 #     for each measurement.
 # (3) Uses descriptive activity names to name the activities in the dataset
 # (4) Appropriately labels the dataset with descriptive variable names.
-# (5) From the data set in step 4, creates a second, independent tidy dataset 
+# (5) From the data set in step 4, creates a second, independent tidy dataset
 #
 #     xlsx used to aread and write source and target data
 #     dplyr used to aggregate data using functions melt and dcast
@@ -23,12 +23,12 @@ packages_check <- lapply(
   }
 )
 
-cleanAndPivot <- function(df) {
-  names(df) <- df[10,]
-  df <- df[-1:-10,] %>%
+clean_pivot <- function(df) {
+  names(df) <- df[10, ]
+  df <- df[-1:-10, ] %>%
     rename(`Time Period` = `Series ID`) %>%
     mutate(`Time Period` = as.Date(as.numeric(`Time Period`), origin = "1899-12-30")) %>%
-    pivot_longer(!`Time Period`, names_to = "Series ID", values_to = "Observation value")
+    pivot_longer(!`Time Period`, names_to = "Series ID", values_to = "Observation Value")
 }
 
 getHeaders <- function(df) {
@@ -42,12 +42,11 @@ getHeaders <- function(df) {
 joinDataAndHeaders <- function(data, header) {
   merge(data, header, by = "Series ID", all.x = TRUE) %>%
     relocate(`Time Period`, .after = `Collection Month`) %>%
-    relocate('Observation value', .after = `Time Period`) %>%
+    relocate("Observation value", .after = `Time Period`) %>%
     relocate(`Data Item Description`, .before = `Series ID`) %>%
     relocate(`Series Type`, .before = `Series ID`) %>%
-    mutate(`Observation value` = as.numeric(`Observation value`)) %>%
+    mutate(`Observation Value` = as.numeric(`Observation Value`)) %>%
     na.exclude()
-  
 }
 
 readXL <- function(sheet_nbr) {
@@ -61,8 +60,7 @@ readXL <- function(sheet_nbr) {
 file_names <- list("5206002_Expenditure_Volume_Measures.xlsx", "5206003_Expenditure_Current_Price.xlsx")
 
 for (file in file_names) {
-
-base_url <- "https://www.abs.gov.au/statistics/economy/national-accounts/australian-national-accounts-national-income-expenditure-and-product/latest-release/"
+  base_url <- "https://www.abs.gov.au/statistics/economy/national-accounts/australian-national-accounts-national-income-expenditure-and-product/latest-release/"
 
   download.file(
     paste0(base_url, file),
@@ -71,34 +69,12 @@ base_url <- "https://www.abs.gov.au/statistics/economy/national-accounts/austral
   )
 
   if (file == "5206002_Expenditure_Volume_Measures.xlsx") {
-
-    message(paste0("Read and tidy... ", file))
-
-    df_headers <- getHeaders(readXL(sheet_nbr=1))
-    df_data1 <- cleanAndPivot(readXL(sheet_nbr=2))
-    df_data2 <- cleanAndPivot(readXL(sheet_nbr=3))
-    df_data <- union(df_data1, df_data2)
-    df_output <-sapply(joinDataAndHeaders(df_data, df_headers), as.character)
-
-    message(paste0("Writing to file... ", gsub(".xlsx", "", file), ".csv"))
-
-    write.table(
-      df_output,
-      file = paste0("data/", sub("\\.[[:alnum:]]+$", "", file), ".csv"),
-      row.names = FALSE,
-      dec = ".",
-      sep = ";",
-      quote = TRUE
-    )
-
-  message(paste0("Done. Refer to .../Output/", gsub(".xlsx", "", file),".csv"))
-
-  } else {
-
     message(paste0("Read and tidy... ", file))
 
     df_headers <- getHeaders(readXL(sheet_nbr = 1))
-    df_data <- cleanAndPivot(readXL(sheet_nbr = 2))
+    df_data1 <- clean_pivot(readXL(sheet_nbr = 2))
+    df_data2 <- clean_pivot(readXL(sheet_nbr = 3))
+    df_data <- union(df_data1, df_data2)
     df_output <- sapply(joinDataAndHeaders(df_data, df_headers), as.character)
 
     message(paste0("Writing to file... ", gsub(".xlsx", "", file), ".csv"))
@@ -112,7 +88,25 @@ base_url <- "https://www.abs.gov.au/statistics/economy/national-accounts/austral
       quote = TRUE
     )
 
-    message(paste0("Done. Refer to .../output/",  gsub(".xlsx", "", file), ".csv"))
+    message(paste0("Done. Refer to .../Output/", gsub(".xlsx", "", file), ".csv"))
+  } else {
+    message(paste0("Read and tidy... ", file))
 
+    df_headers <- getHeaders(readXL(sheet_nbr = 1))
+    df_data <- clean_pivot(readXL(sheet_nbr = 2))
+    df_output <- sapply(joinDataAndHeaders(df_data, df_headers), as.character)
+
+    message(paste0("Writing to file... ", gsub(".xlsx", "", file), ".csv"))
+
+    write.table(
+      df_output,
+      file = paste0("data/", sub("\\.[[:alnum:]]+$", "", file), ".csv"),
+      row.names = FALSE,
+      dec = ".",
+      sep = ";",
+      quote = TRUE
+    )
+
+    message(paste0("Done. Refer to .../output/", gsub(".xlsx", "", file), ".csv"))
   }
 }
