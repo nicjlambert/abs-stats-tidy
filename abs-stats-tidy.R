@@ -8,8 +8,8 @@
 # (4) Appropriately labels the dataset with descriptive variable names.
 # (5) From the data set in step 4, creates a second, independent tidy dataset
 #
-#     xlsx used to aread and write source and target data
-#     dplyr used to aggregate data using functions melt and dcast
+# xlsx used to aread and write source and target data
+# dplyr used to aggregate data using functions melt and dcast
 
 packages <- c("xlsx", "dplyr", "stringr", "readxl", "tidyr")
 
@@ -42,7 +42,7 @@ getHeaders <- function(df) {
 joinDataAndHeaders <- function(data, header) {
   merge(data, header, by = "Series ID", all.x = TRUE) %>%
     relocate(`Time Period`, .after = `Collection Month`) %>%
-    relocate("Observation value", .after = `Time Period`) %>%
+    relocate("Observation Value", .after = `Time Period`) %>%
     relocate(`Data Item Description`, .before = `Series ID`) %>%
     relocate(`Series Type`, .before = `Series ID`) %>%
     mutate(`Observation Value` = as.numeric(`Observation Value`)) %>%
