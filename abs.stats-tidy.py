@@ -18,14 +18,14 @@ df_headers = readXL(temp_file_path, 0, header = 9)
 df_data1 = readXL(temp_file_path, 1, header = 9)
 
 def clean_data(df):
-    df = df.rename(columns={"Series ID": "Time Period"})
-    df = df.melt(id_vars=["Time Period"], var_name="Series ID", value_name="Observation Value")
+    df = (df.rename(columns={"Series ID": "Time Period"})
+            .melt(id_vars=["Time Period"], var_name="Series ID", value_name="Observation Value"))
     return df
 
 def clean_headers(df):
-    df = df.dropna(axis=0, how="all")
-    df = df[~df['Data Item Description'].str.contains('© Commonwealth of Australia', na=False)]
-    df = df.dropna(axis=1, how='all')
+    df = (df.dropna(axis=0, how="all")
+            .loc[~df['Data Item Description'].str.contains('© Commonwealth of Australia', na=False)]
+            .dropna(axis=1, how='all'))
   
     return df
 
@@ -34,3 +34,7 @@ df_data1 = clean_data(df_data1)
 
 print(df_data1.head())
 print(df_headers.tail())
+
+df_output = pd.merge(df_headers, df_data1, on='Series ID', how='inner')  
+print(df_output.head())
+print(df_output.tail())
