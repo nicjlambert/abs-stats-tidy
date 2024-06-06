@@ -11,57 +11,62 @@
 # xlsx used to aread and write source and target data
 # dplyr used to aggregate data using functions melt and dcast
 
+# Load required packages
 packages <- c("xlsx", "dplyr", "stringr", "readxl", "tidyr")
 
-packages_check <- lapply(
-  packages,
-  FUN = function(x) {
-    if (!require(x, character.only = TRUE)) {
-      install.packages(x, dependencies = TRUE, repos = "https://cran.csiro.au")
-      library(x, character.only = TRUE)
-    }
+# Check and install missing packages
+lapply(packages, function(x) {
+  if (!require(x, character.only = TRUE)) {
+    install.packages(x, dependencies = TRUE, repos = "https://cran.csiro.au")
+    library(x, character.only = TRUE)
   }
-)
+})
 
-clean_pivot <- function(df) {
-  names(df) <- df[10, ]
-  df <- df[-1:-10, ] %>%
-    rename(`Time Period` = `Series ID`) %>%
-    mutate(`Time Period` = as.Date(as.numeric(`Time Period`), origin = "1899-12-30")) %>%
-    pivot_longer(!`Time Period`, names_to = "Series ID", values_to = "Observation Value")
-}
-
-getHeaders <- function(df) {
-  names(df) <- df[7, ]
-  df_headers <- df[-1:-7, c(-2, -3, -13)] %>%
-    filter(if_any(everything(), ~ !str_detect(., "Commonwealth of Australia"))) %>%
-    mutate(`Series Start` = as.Date(as.numeric(`Series Start`), origin = "1899-12-30")) %>%
-    mutate(`Series End` = as.Date(as.numeric(`Series End`), origin = "1899-12-30"))
-}
-
-joinDataAndHeaders <- function(data, header) {
-  merge(data, header, by = "Series ID", all.x = TRUE) %>%
-    relocate(`Time Period`, .after = `Collection Month`) %>%
-    relocate("Observation Value", .after = `Time Period`) %>%
-    relocate(`Data Item Description`, .before = `Series ID`) %>%
-    relocate(`Series Type`, .before = `Series ID`) %>%
-    mutate(`Observation Value` = as.numeric(`Observation Value`)) %>%
-    na.exclude()
-}
-
-readXL <- function(sheet_nbr) {
+# Function to read Excel sheets
+readXL <- function(file, sheet_nbr, start_row) {
   read.xlsx(
     file = paste0(getwd(), "/data/", file),
+    startRow = start_row, 
     sheetIndex = sheet_nbr,
-    header = FALSE
+    header = TRUE
   )
 }
 
+# Function to clean and pivot the data
+clean_pivot <- function(df) {
+  df %>%
+    rename(Time.Period = Series.ID) %>%
+    mutate(Time.Period = as.Date(as.numeric(Time.Period), origin = "1899-12-30")) %>%
+    pivot_longer(!Time.Period, names_to = "Series.ID", values_to = "Observation.Value")
+}
+
+# Function to clean and format headers
+getHeaders <- function(df) {
+  df %>%
+    filter(if_any(everything(), ~ !str_detect(., "Commonwealth of Australia"))) %>%
+    mutate(Series.Start = as.Date(as.numeric(Series.Start), origin = "1899-12-30")) %>%
+    mutate(Series.End = as.Date(as.numeric(Series.End), origin = "1899-12-30"))
+}
+
+# Function to join data and headers
+joinDataAndHeaders <- function(data, header) {
+  merge(data, header, by = "Series.ID", all.x = TRUE) %>%
+    relocate(Time.Period, .after = Collection.Month) %>%
+    relocate("Observation.Value", .after = Time.Period) %>%
+    relocate(Data.Item.Description, .before = Series.ID) %>%
+    relocate(Series.Type, .before = Series.ID) %>%
+    mutate(Observation.Value = as.numeric(Observation.Value)) %>%
+    na.exclude()
+}
+
+# File names to download
 file_names <- list("5206002_Expenditure_Volume_Measures.xlsx", "5206003_Expenditure_Current_Price.xlsx")
 
-for (file in file_names) {
-  base_url <- "https://www.abs.gov.au/statistics/economy/national-accounts/australian-national-accounts-national-income-expenditure-and-product/latest-release/"
+# Base URL for downloading files
+base_url <- "https://www.abs.gov.au/statistics/economy/national-accounts/australian-national-accounts-national-income-expenditure-and-product/latest-release/"
 
+# Download files and process data
+for (file in file_names) {
   download.file(
     paste0(base_url, file),
     destfile = paste0(getwd(), "/data/", file),
@@ -70,43 +75,20 @@ for (file in file_names) {
 
   if (file == "5206002_Expenditure_Volume_Measures.xlsx") {
     message(paste0("Read and tidy... ", file))
-
-    df_headers <- getHeaders(readXL(sheet_nbr = 1))
-    df_data1 <- clean_pivot(readXL(sheet_nbr = 2))
-    df_data2 <- clean_pivot(readXL(sheet_nbr = 3))
-    df_data <- union(df_data1, df_data2)
-    df_output <- sapply(joinDataAndHeaders(df_data, df_headers), as.character)
-
-    message(paste0("Writing to file... ", gsub(".xlsx", "", file), ".csv"))
-
-    write.table(
-      df_output,
-      file = paste0("data/", sub("\\.[[:alnum:]]+$", "", file), ".csv"),
-      row.names = FALSE,
-      dec = ".",
-      sep = ";",
-      quote = TRUE
-    )
-
-    message(paste0("Done. Refer to .../Output/", gsub(".xlsx", "", file), ".csv"))
-  } else {
-    message(paste0("Read and tidy... ", file))
-
-    df_headers <- getHeaders(readXL(sheet_nbr = 1))
-    df_data <- clean_pivot(readXL(sheet_nbr = 2))
-    df_output <- sapply(joinDataAndHeaders(df_data, df_headers), as.character)
-
-    message(paste0("Writing to file... ", gsub(".xlsx", "", file), ".csv"))
-
-    write.table(
-      df_output,
-      file = paste0("data/", sub("\\.[[:alnum:]]+$", "", file), ".csv"),
-      row.names = FALSE,
-      dec = ".",
-      sep = ";",
-      quote = TRUE
-    )
-
-    message(paste0("Done. Refer to .../output/", gsub(".xlsx", "", file), ".csv"))
+    df_headers <- getHeaders(readXL(file, sheet_nbr = 1, start_row = 9))
+    df_data <- clean_pivot(readXL(file, sheet_nbr = 2, start_row = 10))
+    combined_data <- joinDataAndHeaders(df_data, df_headers)
   }
 }
+
+# Extract only the measurements on the mean and standard deviation for each measurement
+tidy_data <- combined_data %>%
+  filter(str_detect(Data.Item.Description, "mean|standard deviation"))
+
+# Create a second, independent tidy dataset
+tidy_dataset <- tidy_data %>%
+  group_by(Data.Item.Description, Series.Type) %>%
+  summarize(Average = mean(Observation.Value, na.rm = TRUE), SD = sd(Observation.Value, na.rm = TRUE))
+
+# Write the final tidy dataset to an Excel file
+write.xlsx(tidy_dataset, file = "tidy_dataset.xlsx", sheetName = "Tidy Data", row.names = FALSE)
