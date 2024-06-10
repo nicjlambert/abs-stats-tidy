@@ -12,7 +12,7 @@
 # dplyr used to aggregate data using functions melt and dcast
 
 # Load necessary libraries
-packages <- c("xlsx", "dplyr", "stringr", "readxl", "tidyr")
+packages <- c("readxl", "dplyr", "stringr", "tidyr", "httr")
 
 lapply(packages, function(x) {
   if (!require(x, character.only = TRUE)) {
@@ -21,62 +21,54 @@ lapply(packages, function(x) {
   }
 })
 
-readXL <- function(file, sheet_nbr, start_row) {
-  read.xlsx(
-    file = tf,
-    startRow = start_row, 
-    sheetIndex = sheet_nbr,
-    header = TRUE
-  )
+# URLs of the Australian Bureau of Statistics (ABS) spreadsheet
+urls <- c(
+  "https://www.abs.gov.au/statistics/economy/national-accounts/australian-national-accounts-national-income-expenditure-and-product/latest-release/5206003_Expenditure_Current_Price.xlsx",
+  "https://www.abs.gov.au/statistics/economy/national-accounts/australian-national-accounts-national-income-expenditure-and-product/latest-release/5206002_Expenditure_Volume_Measures.xlsx"
+)
+
+# Function to read an Excel file and take the sheet number as an argument
+readXL <- function(temp_file_path, sheet_nbr, header) {
+  read_excel(temp_file_path, sheet = sheet_nbr, skip = header)
 }
 
-clean_pivot <- function(df) {
+# Function to clean the data
+clean_data <- function(df) {
   df %>%
-    rename(Time.Period = Series.ID) %>%
-    mutate(Time.Period = as.Date(as.numeric(Time.Period), origin = "1899-12-30")) %>%
-    pivot_longer(!Time.Period, names_to = "Series.ID", values_to = "Observation.Value")
+    rename(`Time Period` = `Series ID`) %>%
+    pivot_longer(cols = -c(`Time Period`), names_to = "Series ID", values_to = "Observation Value")
 }
 
-getHeaders <- function(df) {
+# Function to clean the headers
+clean_headers <- function(df) {
   df %>%
-    filter(if_any(everything(), ~ !str_detect(., "Commonwealth of Australia"))) %>%
-    mutate(across(c(Series.Start, Series.End), ~ as.Date(as.numeric(.), origin = "1899-12-30")))
+    filter(!str_detect(`Data Item Description`, '© Commonwealth of Australia')) %>%
+    select(where(~ !all(is.na(.))))
 }
 
-joinDataAndHeaders <- function(data, header) {
-  merge(df_data, df_headers, by = "Series.ID", all.x = TRUE) %>%
-    relocate(Time.Period, .after = Collection.Month) %>%
-    relocate("Observation.Value", .after = Time.Period) %>%
-    relocate(Data.Item.Description, .before = Series.ID) %>%
-    relocate(Series.Type, .before = Series.ID) %>%
-    mutate(Observation.Value = as.numeric(Observation.Value)) %>%
-    select(where(~!all(is.na(.))))
-}
+iteration <- 0
 
-file_names <- list("5206002_Expenditure_Volume_Measures.xlsx", "5206003_Expenditure_Current_Price.xlsx")
-
-base_url <- "https://www.abs.gov.au/statistics/economy/national-accounts/australian-national-accounts-national-income-expenditure-and-product/latest-release/"
-
-tf <- tempfile(fileext="xlsx")
-
-for (file in file_names) {
-  download.file(
-    paste0(base_url, file),
-    destfile = tf,
-    mode = "wb"
-  )
+for (url in urls) {
+  print(paste("Downloading...", url))
   
-  message(paste0("Read and tidy... ", file))
-  df_headers <- getHeaders(readXL(file, sheet_nbr = 1, start_row = 9))
-  df_data <- clean_pivot(readXL(file, sheet_nbr = 2, start_row = 10))
+  file_name <- basename(url)
+  temp_file_path <- tempfile(fileext = ".xlsx")
+  GET(url, write_disk(temp_file_path, overwrite = TRUE))
   
-  if (file == "5206003_Expenditure_Current_Price.xlsx") {
-    df_data2 <- clean_pivot(readXL(file, sheet_nbr = 3, start_row = 10))
-    df_data <- bind_rows(df_data, df_data2)
+  df_headers <- readXL(temp_file_path, 1, 9)
+  df <- readXL(temp_file_path, 2, 9)
+  
+  if (iteration == 1) {
+    df_2 <- readXL(temp_file_path, 3, 9)
+    df <- bind_rows(df, df_2)
   }
   
-  combined_data <- joinDataAndHeaders(df_data, df_headers)
+  iteration <- iteration + 1
   
-  # Save the combined data if needed
-  write.csv(combined_data, paste0("cleaned_", file, ".csv"), row.names = FALSE)
+  print(paste("Applying transformations...", file_name))
+  df_headers <- clean_headers(df_headers)
+  df <- clean_data(df)
+  df <- inner_join(df_headers, df, by = 'Series ID')
+  write.csv(df, file_name)
+  print("Done!")
 }
